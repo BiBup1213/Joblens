@@ -6,8 +6,6 @@ from jobs.models import (
     FitLevel,
     JobAnalysis,
     JobPosting,
-    JobSkill,
-    SkillKind,
     SourcePlatform,
 )
 
@@ -19,32 +17,32 @@ class ImportResult:
 
 def import_job_from_link(url: str) -> ImportResult:
     source_platform = detect_source_platform(url)
-    company_name, job_title = placeholder_title_for_source(source_platform)
 
+    # TODO: Replace this placeholder with real extraction/parsing once available.
     job = JobPosting.objects.create(
-        company_name=company_name,
-        job_title=job_title,
+        company_name="Unbekanntes Unternehmen",
+        job_title="Importierte Stellenanzeige",
         location="",
         work_model="",
         source_platform=source_platform,
         source_url=url,
         application_status=ApplicationStatus.SAVED,
-        fit_level=FitLevel.GOOD,
+        fit_level=FitLevel.PARTIAL,
     )
-    attach_placeholder_analysis(job)
+    attach_empty_placeholder_analysis(job)
     return ImportResult(job=job)
 
 
 def import_job_from_text(text: str) -> ImportResult:
     job = JobPosting.objects.create(
         company_name="Unbekanntes Unternehmen",
-        job_title="Importierte Stelle",
+        job_title="Importierte Stellenanzeige",
         raw_text=text,
         source_platform=SourcePlatform.OTHER,
-        application_status=ApplicationStatus.REVIEW,
+        application_status=ApplicationStatus.SAVED,
         fit_level=FitLevel.PARTIAL,
     )
-    attach_placeholder_analysis(job)
+    attach_empty_placeholder_analysis(job)
     return ImportResult(job=job)
 
 
@@ -56,41 +54,23 @@ def detect_source_platform(url: str) -> str:
     hostname = urlparse(url).hostname or ""
     domain = hostname.lower()
 
-    if "stepstone" in domain:
+    if domain == "stepstone.de" or domain.endswith(".stepstone.de"):
         return SourcePlatform.STEPSTONE
-    if "linkedin" in domain:
+    if domain == "linkedin.com" or domain.endswith(".linkedin.com"):
         return SourcePlatform.LINKEDIN
-    if "arbeitsagentur" in domain:
+    if domain == "arbeitsagentur.de" or domain.endswith(".arbeitsagentur.de"):
         return SourcePlatform.ARBEITSAGENTUR
-    if "xing" in domain:
+    if domain == "xing.com" or domain.endswith(".xing.com"):
         return SourcePlatform.XING
-    if "indeed" in domain:
+    if domain == "indeed.com" or domain.endswith(".indeed.com"):
         return SourcePlatform.INDEED
     return SourcePlatform.OTHER
 
 
-def placeholder_title_for_source(source_platform: str) -> tuple[str, str]:
-    labels = dict(SourcePlatform.choices)
-    label = labels.get(source_platform, "Other")
-    return f"{label} Import", "Importierte Stelle"
-
-
-def attach_placeholder_analysis(job: JobPosting) -> None:
-    # TODO: Replace this placeholder with extraction and AI-assisted profile matching.
-    for name in ["Python", "REST", "Backend"]:
-        JobSkill.objects.create(job=job, name=name, kind=SkillKind.STRENGTH)
-    for name in ["Cloud", "CI/CD"]:
-        JobSkill.objects.create(job=job, name=name, kind=SkillKind.MISSING)
-
+def attach_empty_placeholder_analysis(job: JobPosting) -> None:
     JobAnalysis.objects.create(
         job=job,
-        why_it_fits=[
-            "Die importierte Stelle enthält erste Hinweise auf passende Backend-Erfahrung.",
-            "Die Passform wurde vorläufig aus Platzhalterdaten erstellt.",
-        ],
-        what_does_not_fit=[
-            "Die genaue Anforderungsliste wurde noch nicht extrahiert.",
-            "Profilabgleich und Quellenanalyse folgen in einem späteren Schritt.",
-        ],
-        next_step_note="Import prüfen und bei Bedarf Status ändern.",
+        why_it_fits=[],
+        what_does_not_fit=[],
+        next_step_note="Importiert. Extraktion und Profilabgleich stehen noch aus.",
     )

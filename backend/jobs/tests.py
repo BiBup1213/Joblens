@@ -50,6 +50,7 @@ class JobPostingApiTests(TestCase):
         self.assertEqual(response.data[0]["company_name"], "Cubos GmbH")
         self.assertEqual(response.data[0]["strengths"][0]["name"], "Python")
         self.assertEqual(response.data[0]["missing_skills"][0]["name"], "Go")
+        self.assertIn("why_it_fits", response.data[0]["analysis"])
 
     def test_can_create_job(self):
         payload = {
@@ -100,6 +101,17 @@ class JobPostingApiTests(TestCase):
         self.job.refresh_from_db()
         self.assertEqual(self.job.application_status, ApplicationStatus.INTERVIEW)
 
+    def test_change_status_rejects_invalid_status(self):
+        response = self.client.post(
+            reverse("job-change-status", args=[self.job.id]),
+            {"application_status": "invalid"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.application_status, ApplicationStatus.SAVED)
+
     def test_import_link_endpoint_creates_job(self):
         response = self.client.post(
             reverse("job-import-link"),
@@ -108,9 +120,54 @@ class JobPostingApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["company_name"], "Unbekanntes Unternehmen")
+        self.assertEqual(response.data["job_title"], "Importierte Stellenanzeige")
         self.assertEqual(response.data["source_platform"], SourcePlatform.STEPSTONE)
-        self.assertGreater(len(response.data["strengths"]), 0)
-        self.assertIsNotNone(response.data["analysis"])
+        self.assertEqual(response.data["application_status"], ApplicationStatus.SAVED)
+        self.assertEqual(response.data["fit_level"], FitLevel.PARTIAL)
+        self.assertEqual(response.data["strengths"], [])
+        self.assertEqual(response.data["missing_skills"], [])
+        self.assertEqual(response.data["analysis"]["why_it_fits"], [])
+
+    def test_import_link_rejects_invalid_url(self):
+        response = self.client.post(
+            reverse("job-import-link"),
+            {"url": "not-a-url"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_import_text_creates_placeholder_job(self):
+        response = self.client.post(
+            reverse("job-import-text"),
+            {"text": "Python backend developer role"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["raw_text"], "Python backend developer role")
+        self.assertEqual(response.data["source_platform"], SourcePlatform.OTHER)
+
+    def test_import_bulk_returns_partial_results_and_errors(self):
+        response = self.client.post(
+            reverse("job-import-bulk"),
+            {
+                "urls": [
+                    "https://www.linkedin.com/jobs/view/example",
+                    "not-a-url",
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(len(response.data["errors"]), 1)
+        self.assertEqual(
+            response.data["results"][0]["source_platform"],
+            SourcePlatform.LINKEDIN,
+        )
 
 
 class SeedDemoDataCommandTests(TestCase):

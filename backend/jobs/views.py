@@ -1,7 +1,8 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
-from rest_framework.serializers import ListField, URLField, CharField, Serializer
+from rest_framework.serializers import CharField, ListField, Serializer, URLField
 
 from .models import JobAnalysis, JobPosting, JobSkill
 from .serializers import (
@@ -13,12 +14,11 @@ from .serializers import (
 from .services.importer import (
     import_job_from_link,
     import_job_from_text,
-    import_jobs_from_links,
 )
 
 
 class ImportLinkSerializer(Serializer):
-    url = URLField()
+    url = URLField(error_messages={"required": "url is required."})
 
 
 class ImportTextSerializer(Serializer):
@@ -26,7 +26,13 @@ class ImportTextSerializer(Serializer):
 
 
 class ImportBulkSerializer(Serializer):
-    urls = ListField(child=URLField(), allow_empty=False)
+    urls = ListField(child=CharField(trim_whitespace=True), allow_empty=False)
+
+    def validate_urls(self, value):
+        urls = [url for url in value if url]
+        if not urls:
+            raise ValidationError("At least one URL is required.")
+        return urls
 
 
 class JobPostingViewSet(viewsets.ModelViewSet):
@@ -72,11 +78,24 @@ class JobPostingViewSet(viewsets.ModelViewSet):
     def import_bulk(self, request):
         serializer = ImportBulkSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        results = import_jobs_from_links(serializer.validated_data["urls"])
-        jobs = [result.job for result in results]
+        jobs = []
+        errors = []
+
+        for url in serializer.validated_data["urls"]:
+            url_serializer = ImportLinkSerializer(data={"url": url})
+            if not url_serializer.is_valid():
+                errors.append({"url": url, "error": url_serializer.errors["url"][0]})
+                continue
+            result = import_job_from_link(url_serializer.validated_data["url"])
+            jobs.append(result.job)
+
+        response_status = status.HTTP_201_CREATED if jobs else status.HTTP_400_BAD_REQUEST
         return Response(
-            self.get_serializer(jobs, many=True).data,
-            status=status.HTTP_201_CREATED,
+            {
+                "results": self.get_serializer(jobs, many=True).data,
+                "errors": errors,
+            },
+            status=response_status,
         )
 
 

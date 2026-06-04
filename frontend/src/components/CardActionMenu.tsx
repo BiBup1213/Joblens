@@ -21,9 +21,13 @@ const actions = [
 
 type CardActionMenuProps = {
   onStatusChange: (status: BackendApplicationStatus) => void;
+  isDisabled: boolean;
 };
 
-export function CardActionMenu({ onStatusChange }: CardActionMenuProps) {
+export function CardActionMenu({
+  onStatusChange,
+  isDisabled,
+}: CardActionMenuProps) {
   return (
     <div className="card-action-menu" role="menu" aria-label="Kartenaktionen">
       {actions.map((action) => {
@@ -34,6 +38,7 @@ export function CardActionMenu({ onStatusChange }: CardActionMenuProps) {
             key={action.label}
             role="menuitem"
             type="button"
+            disabled={isDisabled}
             onClick={() => onStatusChange(action.status)}
           >
             <Icon aria-hidden="true" size={17} />

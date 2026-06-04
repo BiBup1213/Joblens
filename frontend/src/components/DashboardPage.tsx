@@ -11,6 +11,7 @@ type DashboardPageProps = {
   jobs: JobPosting[];
   isLoading: boolean;
   errorMessage: string | null;
+  pendingStatusJobIds: string[];
   onAddJob: () => void;
   onRetry: () => void;
   onStatusChange: (jobId: string, status: BackendApplicationStatus) => void;
@@ -20,6 +21,7 @@ export function DashboardPage({
   jobs,
   isLoading,
   errorMessage,
+  pendingStatusJobIds,
   onAddJob,
   onRetry,
   onStatusChange,
@@ -80,8 +82,14 @@ export function DashboardPage({
         )}
 
         {!isLoading && !errorMessage && jobs.length === 0 && (
-          <div className="dashboard-state">
-            Noch keine Stellen vorhanden.
+          <div className="dashboard-state dashboard-empty-state">
+            <div>
+              <h2>Noch keine Stellen gespeichert</h2>
+              <p>Füge deine erste Stellenanzeige per Link, Text oder Datei hinzu.</p>
+            </div>
+            <button type="button" onClick={onAddJob}>
+              Stelle hinzufügen
+            </button>
           </div>
         )}
 
@@ -116,6 +124,7 @@ export function DashboardPage({
                   setOpenMenuJobId(null);
                   onStatusChange(job.id, status);
                 }}
+                isStatusUpdating={pendingStatusJobIds.includes(job.id)}
               />
             ))}
           </section>

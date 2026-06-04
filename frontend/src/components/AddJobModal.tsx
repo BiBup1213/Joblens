@@ -35,12 +35,24 @@ export function AddJobModal({
     return null;
   }
 
+  function resetAndClose() {
+    setErrorMessage(null);
+    setIsImporting(false);
+    onClose();
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
-    setIsImporting(true);
+
+    const validationMessage = getValidationMessage();
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
 
     try {
+      setIsImporting(true);
       if (activeTab === "Link") {
         await onImportLink(linkValue.trim());
         setLinkValue("");
@@ -49,7 +61,7 @@ export function AddJobModal({
         setTextValue("");
       } else if (activeTab === "Mehrere Links") {
         const urls = bulkValue
-          .split(/\s+/)
+          .split(/\r?\n/)
           .map((url) => url.trim())
           .filter(Boolean);
         await onImportBulk(urls);
@@ -57,7 +69,7 @@ export function AddJobModal({
       }
 
       if (activeTab !== "Datei") {
-        onClose();
+        resetAndClose();
       }
     } catch (error) {
       setErrorMessage(
@@ -70,15 +82,40 @@ export function AddJobModal({
     }
   }
 
-  const isImportDisabled =
-    isImporting ||
-    (activeTab === "Link" && linkValue.trim().length === 0) ||
-    (activeTab === "Text" && textValue.trim().length === 0) ||
-    (activeTab === "Mehrere Links" && bulkValue.trim().length === 0) ||
-    activeTab === "Datei";
+  function getValidationMessage() {
+    if (activeTab === "Link") {
+      if (!linkValue.trim()) {
+        return "Bitte füge einen Stellenlink ein.";
+      }
+      if (!looksLikeUrl(linkValue.trim())) {
+        return "Bitte gib eine gültige URL ein.";
+      }
+    }
+
+    if (activeTab === "Text" && !textValue.trim()) {
+      return "Bitte füge den Text der Stellenanzeige ein.";
+    }
+
+    if (activeTab === "Mehrere Links") {
+      const urls = bulkValue
+        .split(/\r?\n/)
+        .map((url) => url.trim())
+        .filter(Boolean);
+      if (urls.length === 0) {
+        return "Bitte füge mindestens einen Link ein.";
+      }
+      if (!urls.some(looksLikeUrl)) {
+        return "Bitte füge mindestens eine gültige URL ein.";
+      }
+    }
+
+    return null;
+  }
+
+  const isImportDisabled = isImporting || activeTab === "Datei";
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop" role="presentation" onClick={resetAndClose}>
       <form
         className="add-modal"
         role="dialog"
@@ -86,6 +123,7 @@ export function AddJobModal({
         aria-labelledby="add-job-title"
         onClick={(event) => event.stopPropagation()}
         onSubmit={handleSubmit}
+        noValidate
       >
         <header>
           <h2 id="add-job-title">Neue Stelle hinzufügen</h2>
@@ -156,7 +194,7 @@ export function AddJobModal({
         </div>
 
         <footer>
-          <button className="modal-cancel" type="button" onClick={onClose}>
+          <button className="modal-cancel" type="button" onClick={resetAndClose}>
             Abbrechen
           </button>
           <button
@@ -170,4 +208,13 @@ export function AddJobModal({
       </form>
     </div>
   );
+}
+
+function looksLikeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

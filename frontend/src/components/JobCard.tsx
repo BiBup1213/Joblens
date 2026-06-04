@@ -15,6 +15,7 @@ type JobCardProps = {
   onToggleDetails: () => void;
   onToggleMenu: () => void;
   onStatusChange: (status: BackendApplicationStatus) => void;
+  isStatusUpdating: boolean;
 };
 
 export function JobCard({
@@ -24,6 +25,7 @@ export function JobCard({
   onToggleDetails,
   onToggleMenu,
   onStatusChange,
+  isStatusUpdating,
 }: JobCardProps) {
   return (
     <article
@@ -54,6 +56,7 @@ export function JobCard({
             type="button"
             aria-label={`Aktionen für ${job.company}`}
             aria-expanded={isMenuOpen}
+            disabled={isStatusUpdating}
             onClick={(event) => {
               event.stopPropagation();
               onToggleMenu();
@@ -63,7 +66,10 @@ export function JobCard({
           </button>
           {isMenuOpen && (
             <div onClick={(event) => event.stopPropagation()}>
-              <CardActionMenu onStatusChange={onStatusChange} />
+              <CardActionMenu
+                onStatusChange={onStatusChange}
+                isDisabled={isStatusUpdating}
+              />
             </div>
           )}
         </div>

@@ -70,7 +70,7 @@ class JobPostingSerializer(serializers.ModelSerializer):
     )
     strengths = serializers.SerializerMethodField()
     missing_skills = serializers.SerializerMethodField()
-    analysis = NestedJobAnalysisSerializer(read_only=True)
+    analysis = serializers.SerializerMethodField()
 
     class Meta:
         model = JobPosting
@@ -104,6 +104,17 @@ class JobPostingSerializer(serializers.ModelSerializer):
         skills = obj.skills.filter(kind=SkillKind.MISSING)
         return NestedJobSkillSerializer(skills, many=True).data
 
+    def get_analysis(self, obj):
+        try:
+            analysis = obj.analysis
+        except JobAnalysis.DoesNotExist:
+            return {
+                "why_it_fits": [],
+                "what_does_not_fit": [],
+                "next_step_note": "",
+            }
+        return NestedJobAnalysisSerializer(analysis).data
+
     def validate_company_name(self, value):
         if not value.strip():
             raise serializers.ValidationError("Company name must not be empty.")
@@ -116,4 +127,10 @@ class JobPostingSerializer(serializers.ModelSerializer):
 
 
 class ChangeStatusSerializer(serializers.Serializer):
-    application_status = serializers.ChoiceField(choices=ApplicationStatus.choices)
+    application_status = serializers.ChoiceField(
+        choices=ApplicationStatus.choices,
+        error_messages={
+            "invalid_choice": "Unsupported application status.",
+            "required": "application_status is required.",
+        },
+    )

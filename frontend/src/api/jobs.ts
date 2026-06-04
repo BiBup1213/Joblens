@@ -51,6 +51,16 @@ export const statusToBackend: Record<ApplicationStatus, BackendApplicationStatus
   Archiviert: "archived",
 };
 
+export type BulkImportError = {
+  url: string;
+  error: string;
+};
+
+export type BulkImportResult = {
+  jobs: JobPosting[];
+  errors: BulkImportError[];
+};
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
@@ -61,11 +71,35 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const message = await getErrorMessage(response);
     throw new Error(message || `API request failed with ${response.status}`);
   }
 
   return response.json() as Promise<T>;
+}
+
+async function getErrorMessage(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const body = await response.json();
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    if (typeof body.error === "string") {
+      return body.error;
+    }
+    return Object.entries(body)
+      .map(([field, value]) => {
+        if (Array.isArray(value)) {
+          return `${field}: ${value.join(", ")}`;
+        }
+        return `${field}: ${String(value)}`;
+      })
+      .join(" ");
+  }
+
+  return response.text();
 }
 
 export async function getJobs(): Promise<JobPosting[]> {
@@ -108,12 +142,23 @@ export async function importJobText(text: string): Promise<JobPosting> {
   return mapBackendJob(job);
 }
 
-export async function importBulkJobLinks(urls: string[]): Promise<JobPosting[]> {
-  const jobs = await request<BackendJobPosting[]>("/jobs/import-bulk/", {
+export async function importBulkJobLinks(urls: string[]): Promise<BulkImportResult> {
+  const response = await request<
+    | BackendJobPosting[]
+    | { results: BackendJobPosting[]; errors?: BulkImportError[] }
+  >("/jobs/import-bulk/", {
     method: "POST",
     body: JSON.stringify({ urls }),
   });
-  return jobs.map(mapBackendJob);
+
+  if (Array.isArray(response)) {
+    return { jobs: response.map(mapBackendJob), errors: [] };
+  }
+
+  return {
+    jobs: response.results.map(mapBackendJob),
+    errors: response.errors ?? [],
+  };
 }
 
 function mapBackendJob(job: BackendJobPosting): JobPosting {

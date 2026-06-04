@@ -16,6 +16,7 @@ export default function App() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingStatusJobIds, setPendingStatusJobIds] = useState<string[]>([]);
 
   const loadJobs = useCallback(async () => {
     setIsLoading(true);
@@ -42,7 +43,12 @@ export default function App() {
     jobId: string,
     status: BackendApplicationStatus,
   ) {
+    if (pendingStatusJobIds.includes(jobId)) {
+      return;
+    }
+
     const previousJobs = jobs;
+    setPendingStatusJobIds((ids) => [...ids, jobId]);
     setJobs((currentJobs) =>
       currentJobs.map((job) =>
         job.id === jobId
@@ -64,6 +70,8 @@ export default function App() {
           ? error.message
           : "Der Status konnte nicht aktualisiert werden.",
       );
+    } finally {
+      setPendingStatusJobIds((ids) => ids.filter((id) => id !== jobId));
     }
   }
 
@@ -80,9 +88,13 @@ export default function App() {
   }
 
   async function handleImportBulk(urls: string[]) {
-    const importedJobs = await importBulkJobLinks(urls);
-    setJobs((currentJobs) => [...importedJobs, ...currentJobs]);
-    setErrorMessage(null);
+    const result = await importBulkJobLinks(urls);
+    setJobs((currentJobs) => [...result.jobs, ...currentJobs]);
+    setErrorMessage(
+      result.errors.length > 0
+        ? `${result.jobs.length} Stellen importiert, ${result.errors.length} Links konnten nicht verarbeitet werden.`
+        : null,
+    );
   }
 
   return (
@@ -91,6 +103,7 @@ export default function App() {
         jobs={jobs}
         isLoading={isLoading}
         errorMessage={errorMessage}
+        pendingStatusJobIds={pendingStatusJobIds}
         onAddJob={() => setIsAddModalOpen(true)}
         onRetry={loadJobs}
         onStatusChange={handleStatusChange}
