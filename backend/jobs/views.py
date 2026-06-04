@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -15,6 +17,9 @@ from .services.importer import (
     import_job_from_link,
     import_job_from_text,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class ImportLinkSerializer(Serializer):
@@ -47,18 +52,28 @@ class JobPostingViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="change-status")
     def change_status(self, request, pk=None):
+        logger.info("JobLens change-status endpoint called for job_id=%s", pk)
         job = self.get_object()
         serializer = ChangeStatusSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.warning("JobLens change-status validation error: %s", serializer.errors)
+            serializer.is_valid(raise_exception=True)
         job.application_status = serializer.validated_data["application_status"]
         job.save(update_fields=["application_status", "updated_at"])
         return Response(self.get_serializer(job).data)
 
     @action(detail=False, methods=["post"], url_path="import-link")
     def import_link(self, request):
+        logger.info("JobLens import-link endpoint called")
         serializer = ImportLinkSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        result = import_job_from_link(serializer.validated_data["url"])
+        if not serializer.is_valid():
+            logger.warning("JobLens import-link validation error: %s", serializer.errors)
+            serializer.is_valid(raise_exception=True)
+        try:
+            result = import_job_from_link(serializer.validated_data["url"])
+        except Exception:
+            logger.exception("JobLens import-link endpoint failed")
+            raise
         return Response(
             self.get_serializer(result.job).data,
             status=status.HTTP_201_CREATED,
@@ -66,9 +81,16 @@ class JobPostingViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="import-text")
     def import_text(self, request):
+        logger.info("JobLens import-text endpoint called")
         serializer = ImportTextSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        result = import_job_from_text(serializer.validated_data["text"])
+        if not serializer.is_valid():
+            logger.warning("JobLens import-text validation error: %s", serializer.errors)
+            serializer.is_valid(raise_exception=True)
+        try:
+            result = import_job_from_text(serializer.validated_data["text"])
+        except Exception:
+            logger.exception("JobLens import-text endpoint failed")
+            raise
         return Response(
             self.get_serializer(result.job).data,
             status=status.HTTP_201_CREATED,
@@ -76,8 +98,11 @@ class JobPostingViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="import-bulk")
     def import_bulk(self, request):
+        logger.info("JobLens import-bulk endpoint called")
         serializer = ImportBulkSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.warning("JobLens import-bulk validation error: %s", serializer.errors)
+            serializer.is_valid(raise_exception=True)
         jobs = []
         errors = []
 
